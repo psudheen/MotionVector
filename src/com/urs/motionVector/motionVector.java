@@ -37,7 +37,7 @@ public class motionVector
 	private static void ReadRGB()
 	{
 		// TODO Auto-generated method stub
-		int VIDEOLEN = 2 * 60;
+		int VIDEOLEN = 10 * 60;
 		try
 		{
 			File file = new File(fileName);
@@ -174,13 +174,7 @@ public class motionVector
 					{
 						for (int x = (midPt_W - 8); x < (midPt_W + 8); x++)
 						{
-							short r = (short) (FrameByteData[index] & 0xff);
-							short g = (short) (FrameByteData[index + height
-									* width] & 0xff);
-							short b = (short) (FrameByteData[index + height
-									* width * 2] & 0xff);
-							int valY = (int) (0.299 * r + 0.587 * g + 0.114 * b);
-							prevFrameBlk[row][col] = Math.abs(valY);
+							prevFrameBlk[row][col] = FrameData2D[y][x];
 							index++;
 							col++;
 						}
@@ -188,20 +182,30 @@ public class motionVector
 						col = 0;
 					}
 					// Current Frame BLK: 8 * 8 pts
-					index = 0;
+					ind = 0;
 					videoFS.read(FrameByteData);
+					rw=cl=0;
+					for (int y = 0; y < height; y++)
+					{
+						for (int x = 0; x < width; x++)
+						{
+							short r = (short) (FrameByteData[ind] & 0xff);
+							short g = (short) (FrameByteData[ind + height * width] & 0xff);
+							short b = (short) (FrameByteData[ind + height * width * 2] & 0xff);
+							int Y = (int) (0.299 * r + 0.587 * g + 0.114 * b);
+							FrameData2D[rw][cl] = Math.abs(Y);
+							ind++;
+							cl++;
+						}
+						rw++;
+						cl=0;
+					}
 					row = col = 0;
 					for (int y = (midPt_H - 4); y < (midPt_H + 4); y++)
 					{
 						for (int x = (midPt_W - 4); x < (midPt_W + 4); x++)
 						{
-							short r = (short) (FrameByteData[index] & 0xff);
-							short g = (short) (FrameByteData[index + height
-									* width] & 0xff);
-							short b = (short) (FrameByteData[index + height
-									* width * 2] & 0xff);
-							int valY = (int) (0.299 * r + 0.587 * g + 0.114 * b);
-							curFrameBlk[row][col] = Math.abs(valY);
+							curFrameBlk[row][col] = FrameData2D[y][x];
 							index++;
 							col++;
 						}
@@ -215,11 +219,9 @@ public class motionVector
 					 */
 
 					int tempMeanDiff = 0;
-					int ind = 0;
-
 					int nextRow = 0;
 					int colOffset = 0;
-					
+					int pos=0;
 					while(nextRow<16)
 					{
 						while(colOffset<16)
@@ -232,7 +234,7 @@ public class motionVector
 											- curFrameBlk[i][j]);
 								}
 							}
-							meanDiff[ind++] = (tempMeanDiff/64);
+							meanDiff[pos++] = (tempMeanDiff/64);
 							colOffset+=8;
 						}
 						nextRow+=8;
