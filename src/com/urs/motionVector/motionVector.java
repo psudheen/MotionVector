@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Properties;
 
 public class motionVector
 {
@@ -33,10 +34,17 @@ public class motionVector
 	private static void ReadRGB()
 	{
 		// TODO Auto-generated method stub
-		int VIDEOLEN = 3 * 60;
+		int VIDEOLEN;
+		int DEBUG = 1;
 		try
 		{
 			File file = new File(fileName);
+			System.out.println(file.length());
+			long vidLen = file.length();
+			vidLen = vidLen/(height*width*3);
+			vidLen = vidLen/24;
+			vidLen = vidLen/(60);
+			VIDEOLEN = (int)vidLen;
 			InputStream is = new FileInputStream(file);
 			ArrayList<ArrayList> scenes = new ArrayList<ArrayList>();
 			long len = width * height * 3;
@@ -44,6 +52,11 @@ public class motionVector
 			int[] histPrev = new int[256];
 			int histDifferencePrev = 0;
 			ArrayList<Integer> frames = new ArrayList<Integer>();
+			
+			if(DEBUG==1)
+			{
+				VIDEOLEN = 10 * 60;
+			}
 			
 			
 			for (int i = 0; i < VIDEOLEN * 24; i++)
@@ -112,33 +125,30 @@ public class motionVector
 			int midPt_H = (height / 2);
 			int[][] prevFrameBlk = new int[16][16];
 			int[][] curFrameBlk = new int[8][8];
+			int[][] tempPrevFrameBlk = new int[16][16];
 			
-			int[][] SceneMV = new int[1000][1000];
-			//int[] meanDiff = new int[200]; // CHECK!!
 			ArrayList<Integer> meanDiff = new ArrayList<Integer>();
 			ArrayList<Integer> MotionVector = new ArrayList<Integer>();
 			int row, col;
 			row = col = 0;
 			InputStream videoFS = new FileInputStream(file);
 			byte[] FrameByteData = new byte[(int)len];
-
-			for (int SceneNum = 0; SceneNum < scenes.size(); SceneNum++)
+			int[][] FrameData2D = new int[height][width];
+			
+			
+			for(int frameNo=0; frameNo<VIDEOLEN * 24 ; frameNo++)
 			{
-				for (int FrameNo = 0; FrameNo < scenes.get(SceneNum).size(); FrameNo=FrameNo+2)
+				int ind = 0;
+				int rw, cl;
+				rw=cl=0;
+				
+				if(frameNo==0)
 				{
-					if(FrameNo==0)
-					{
-						SceneMV[SceneNum][FrameNo] = -100;// JUNK VALUE!! -- CHECK!
-						continue;
-					}
-					// Previous Frame BLK: 16 * 16 pts		
-					videoFS.read(FrameByteData);
+					// Add MV as ZERO for FRAME ZERO
+					MotionVector.add(0);
 					
+					videoFS.read(FrameByteData);
 					// Convert FrameByteData to 2d array
-					int ind = 0;
-					int[][] FrameData2D = new int[height][width];
-					int rw, cl;
-					rw=cl=0;
 					for (int y = 0; y < height; y++)
 					{
 						for (int x = 0; x < width; x++)
@@ -165,7 +175,10 @@ public class motionVector
 						row++;
 						col = 0;
 					}
-					// Current Frame BLK: 8 * 8 pts
+					continue;
+				}
+				else if(frameNo == 1)
+				{
 					ind = 0;
 					videoFS.read(FrameByteData);
 					rw=cl=0;
@@ -195,40 +208,98 @@ public class motionVector
 						row++;
 						col = 0;
 					}
-
-					/*
-					 * Compute mean average difference and store per frame per
-					 * scene
-					 */
-
-					int tempMeanDiff = 0;
-					int nextRow = 0;
-					int colOffset = 0;
-					while(nextRow<16)
+					row = col = 0;
+					for (int y = (midPt_H - 8); y < (midPt_H + 8); y++)
 					{
-						while((colOffset+8)<16)
+						for (int x = (midPt_W - 8); x < (midPt_W + 8); x++)
 						{
-							for (int i = 0; i < 8; i++)
-							{
-								for (int j = 0; j < 8; j++)
-								{
-									//System.out.println(j +" " +colOffset);
-									tempMeanDiff += Math.abs(prevFrameBlk[i+nextRow][j+colOffset]
-											        - curFrameBlk[i][j]);
-								}
-							}
-							meanDiff.add(tempMeanDiff/64);
-							colOffset+=4;
+							tempPrevFrameBlk[row][col] = FrameData2D[y][x];
+							col++;
 						}
-						nextRow+=8;
-						colOffset=0;
+						row++;
+						col = 0;
 					}
-					Collections.sort(meanDiff);
-					SceneMV[SceneNum][FrameNo]=meanDiff.get(0);
-					MotionVector.add(meanDiff.get(0));
-					System.out.println("MV array"+"="+SceneMV[SceneNum][FrameNo]+" "
-					                 + "Frame No:"+FrameNo+" "+ "Scene No:"+SceneNum);
-					meanDiff.clear();
+				}
+				/*
+				 * Compute mean average difference and store per frame per
+				 * scene
+				 */
+
+				int tempMeanDiff = 0;
+				int nextRow = 0;
+				int colOffset = 0;
+				while(nextRow<16)
+				{
+					while((colOffset+8)<16)
+					{
+						for (int i = 0; i < 8; i++)
+						{
+							for (int j = 0; j < 8; j++)
+							{
+								//System.out.println(j +" " +colOffset);
+								tempMeanDiff += Math.abs(prevFrameBlk[i+nextRow][j+colOffset]
+										        - curFrameBlk[i][j]);
+							}
+						}
+						meanDiff.add(tempMeanDiff/64);
+						colOffset+=4;
+					}
+					nextRow+=8;
+					colOffset=0;
+				}
+				Collections.sort(meanDiff);
+				MotionVector.add(meanDiff.get(0));
+				meanDiff.clear();
+				
+				// copy previous frame data
+				for (int i = 0; i < 16; i++)
+				{
+					for (int j = 0; j < 16; j++)
+					{
+						prevFrameBlk[i][j] = tempPrevFrameBlk[i][j];
+					}
+				}	
+				
+				// Read the frame data for next calculation!
+				ind = 0;
+				videoFS.read(FrameByteData);
+				rw=cl=0;
+				for (int y = 0; y < height; y++)
+				{
+					for (int x = 0; x < width; x++)
+					{
+						short r = (short) (FrameByteData[ind] & 0xff);
+						short g = (short) (FrameByteData[ind + height * width] & 0xff);
+						short b = (short) (FrameByteData[ind + height * width * 2] & 0xff);
+						int Y = (int) (0.299 * r + 0.587 * g + 0.114 * b);
+						FrameData2D[rw][cl] = Math.abs(Y);
+						ind++;
+						cl++;
+					}
+					rw++;
+					cl=0;
+				}
+				row = col = 0;
+				for (int y = (midPt_H - 4); y < (midPt_H + 4); y++)
+				{
+					for (int x = (midPt_W - 4); x < (midPt_W + 4); x++)
+					{
+						curFrameBlk[row][col] = FrameData2D[y][x];
+						col++;
+					}
+					row++;
+					col = 0;
+				}
+				row = col = 0;
+				for (int y = (midPt_H - 8); y < (midPt_H + 8); y++)
+				{
+					for (int x = (midPt_W - 8); x < (midPt_W + 8); x++)
+					{
+						tempPrevFrameBlk[row][col] = FrameData2D[y][x];
+						col++;
+					}
+					row++;
+					col = 0;
 				}
 				
 			}
