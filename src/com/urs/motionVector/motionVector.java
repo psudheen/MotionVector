@@ -8,7 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Properties;
+import java.io.BufferedInputStream;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+
 
 public class motionVector
 {
@@ -20,6 +23,9 @@ public class motionVector
 
 	static String fileName = "";
 	static int[][] bins;
+	
+	static ArrayList<ArrayList> scenes = new ArrayList<ArrayList>();
+	static ArrayList<Integer> frames = new ArrayList<Integer>();
 
 	public static void main(String[] args)
 	{
@@ -28,37 +34,34 @@ public class motionVector
 		width = 320;
 		height = 240;
 		bins = new int[3][256];
-		ReadRGB();
+		VideoProcessing();
+		AudioProcessing(args[1]);
 	}
 
-	private static void ReadRGB()
+	private static void VideoProcessing()
 	{
-		// TODO Auto-generated method stub
 		int VIDEOLEN;
 		int DEBUG = 1;
+		
 		try
 		{
 			File file = new File(fileName);
-			System.out.println(file.length());
 			long vidLen = file.length();
-			vidLen = vidLen/(height*width*3);
-			vidLen = vidLen/24;
-			vidLen = vidLen/(60);
-			VIDEOLEN = (int)vidLen;
+			vidLen = vidLen / (height * width * 3);
+			vidLen = vidLen / 24;
+			vidLen = vidLen / (60);
+			VIDEOLEN = (int) vidLen;
 			InputStream is = new FileInputStream(file);
-			ArrayList<ArrayList> scenes = new ArrayList<ArrayList>();
 			long len = width * height * 3;
 			byte[] bytes = new byte[(int) len];
 			int[] histPrev = new int[256];
 			int histDifferencePrev = 0;
-			ArrayList<Integer> frames = new ArrayList<Integer>();
-			
-			if(DEBUG==1)
+
+			if (DEBUG == 1)
 			{
-				VIDEOLEN = 10 * 60;
+				VIDEOLEN = 3 * 60;
 			}
-			
-			
+
 			for (int i = 0; i < VIDEOLEN * 24; i++)
 			{
 				int[] histCurrent = new int[256];
@@ -126,27 +129,26 @@ public class motionVector
 			int[][] prevFrameBlk = new int[16][16];
 			int[][] curFrameBlk = new int[8][8];
 			int[][] tempPrevFrameBlk = new int[16][16];
-			
+
 			ArrayList<Integer> meanDiff = new ArrayList<Integer>();
 			ArrayList<Integer> MotionVector = new ArrayList<Integer>();
 			int row, col;
 			row = col = 0;
 			InputStream videoFS = new FileInputStream(file);
-			byte[] FrameByteData = new byte[(int)len];
+			byte[] FrameByteData = new byte[(int) len];
 			int[][] FrameData2D = new int[height][width];
-			
-			
-			for(int frameNo=0; frameNo<VIDEOLEN * 24 ; frameNo++)
+
+			for (int frameNo = 0; frameNo < VIDEOLEN * 24; frameNo++)
 			{
 				int ind = 0;
 				int rw, cl;
-				rw=cl=0;
-				
-				if(frameNo==0)
+				rw = cl = 0;
+
+				if (frameNo == 0)
 				{
 					// Add MV as ZERO for FRAME ZERO
 					MotionVector.add(0);
-					
+
 					videoFS.read(FrameByteData);
 					// Convert FrameByteData to 2d array
 					for (int y = 0; y < height; y++)
@@ -154,15 +156,17 @@ public class motionVector
 						for (int x = 0; x < width; x++)
 						{
 							short r = (short) (FrameByteData[ind] & 0xff);
-							short g = (short) (FrameByteData[ind + height * width] & 0xff);
-							short b = (short) (FrameByteData[ind + height * width * 2] & 0xff);
+							short g = (short) (FrameByteData[ind + height
+									* width] & 0xff);
+							short b = (short) (FrameByteData[ind + height
+									* width * 2] & 0xff);
 							int Y = (int) (0.299 * r + 0.587 * g + 0.114 * b);
 							FrameData2D[rw][cl] = Math.abs(Y);
 							ind++;
 							cl++;
 						}
 						rw++;
-						cl=0;
+						cl = 0;
 					}
 					row = col = 0;
 					for (int y = (midPt_H - 8); y < (midPt_H + 8); y++)
@@ -176,26 +180,27 @@ public class motionVector
 						col = 0;
 					}
 					continue;
-				}
-				else if(frameNo == 1)
+				} else if (frameNo == 1)
 				{
 					ind = 0;
 					videoFS.read(FrameByteData);
-					rw=cl=0;
+					rw = cl = 0;
 					for (int y = 0; y < height; y++)
 					{
 						for (int x = 0; x < width; x++)
 						{
 							short r = (short) (FrameByteData[ind] & 0xff);
-							short g = (short) (FrameByteData[ind + height * width] & 0xff);
-							short b = (short) (FrameByteData[ind + height * width * 2] & 0xff);
+							short g = (short) (FrameByteData[ind + height
+									* width] & 0xff);
+							short b = (short) (FrameByteData[ind + height
+									* width * 2] & 0xff);
 							int Y = (int) (0.299 * r + 0.587 * g + 0.114 * b);
 							FrameData2D[rw][cl] = Math.abs(Y);
 							ind++;
 							cl++;
 						}
 						rw++;
-						cl=0;
+						cl = 0;
 					}
 					row = col = 0;
 					for (int y = (midPt_H - 4); y < (midPt_H + 4); y++)
@@ -221,36 +226,36 @@ public class motionVector
 					}
 				}
 				/*
-				 * Compute mean average difference and store per frame per
-				 * scene
+				 * Compute mean average difference and store per frame per scene
 				 */
 
 				int tempMeanDiff = 0;
 				int nextRow = 0;
 				int colOffset = 0;
-				while(nextRow<16)
+				while (nextRow < 16)
 				{
-					while((colOffset+8)<16)
+					while ((colOffset + 8) < 16)
 					{
 						for (int i = 0; i < 8; i++)
 						{
 							for (int j = 0; j < 8; j++)
 							{
-								//System.out.println(j +" " +colOffset);
-								tempMeanDiff += Math.abs(prevFrameBlk[i+nextRow][j+colOffset]
-										        - curFrameBlk[i][j]);
+								// System.out.println(j +" " +colOffset);
+								tempMeanDiff += Math.abs(prevFrameBlk[i
+										+ nextRow][j + colOffset]
+										- curFrameBlk[i][j]);
 							}
 						}
-						meanDiff.add(tempMeanDiff/64);
-						colOffset+=4;
+						meanDiff.add(tempMeanDiff / 64);
+						colOffset += 4;
 					}
-					nextRow+=8;
-					colOffset=0;
+					nextRow += 8;
+					colOffset = 0;
 				}
 				Collections.sort(meanDiff);
 				MotionVector.add(meanDiff.get(0));
 				meanDiff.clear();
-				
+
 				// copy previous frame data
 				for (int i = 0; i < 16; i++)
 				{
@@ -258,26 +263,27 @@ public class motionVector
 					{
 						prevFrameBlk[i][j] = tempPrevFrameBlk[i][j];
 					}
-				}	
-				
+				}
+
 				// Read the frame data for next calculation!
 				ind = 0;
 				videoFS.read(FrameByteData);
-				rw=cl=0;
+				rw = cl = 0;
 				for (int y = 0; y < height; y++)
 				{
 					for (int x = 0; x < width; x++)
 					{
 						short r = (short) (FrameByteData[ind] & 0xff);
 						short g = (short) (FrameByteData[ind + height * width] & 0xff);
-						short b = (short) (FrameByteData[ind + height * width * 2] & 0xff);
+						short b = (short) (FrameByteData[ind + height * width
+								* 2] & 0xff);
 						int Y = (int) (0.299 * r + 0.587 * g + 0.114 * b);
 						FrameData2D[rw][cl] = Math.abs(Y);
 						ind++;
 						cl++;
 					}
 					rw++;
-					cl=0;
+					cl = 0;
 				}
 				row = col = 0;
 				for (int y = (midPt_H - 4); y < (midPt_H + 4); y++)
@@ -301,24 +307,108 @@ public class motionVector
 					row++;
 					col = 0;
 				}
-				
+
 			}
-			int loc=0;
-			for(int MV:MotionVector)
+			if (DEBUG == 1)
 			{
-				System.out.println("MotionVector["+ loc++ +"]="+MV);
-			}			
-		} 
-		catch (FileNotFoundException e)
+				int loc = 0;
+				for (int MV : MotionVector)
+				{
+					System.out.println("MotionVector[" + loc++ + "]=" + MV);
+				}
+			}
+		} catch (FileNotFoundException e)
 		{
 			e.printStackTrace();
 			System.exit(0);
-		} 
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			e.printStackTrace();
 			System.exit(0);
 		}
+	}
+
+	/*
+	 * Start code for audio processing
+	 * 
+	 * Get the scene/shot wise audio RMS values
+	 */
+	
+
+	public static double RootMeanSquared(byte[] audio)
+	{
+		double sum = 0;
+		double avg = 0;
+		for (int i = 0; i < audio.length; i++)
+		{
+			sum += Math.abs(audio[i]);
+		}
+		avg = sum / audio.length;
+
+		double rms = 0;
+		for (int i = 0; i < audio.length; i++)
+		{
+			rms = rms + Math.pow(audio[i] - avg, 2);
+		}
+		rms = rms / audio.length;
+		return rms;
+	}
+
+	public static void AudioProcessing(String strAudioFilePath)
+	{
+		InputStream fileInputStream;
+		AudioInputStream audioInputStream = null;
+		InputStream inputStream = null;
+		float AudioBytesPerFrame = (22050*2)/24;
+		ArrayList<Double> SceneRMS = new ArrayList<Double>();
+		int DEBUG = 1;
+		
+		try
+		{
+			fileInputStream = new FileInputStream(strAudioFilePath);
+			inputStream = new BufferedInputStream(fileInputStream);
+			audioInputStream = AudioSystem.getAudioInputStream(inputStream);
+		} 
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		try
+		{
+			//compute scene/shot wise RMS values for all the frames inside the scene
+			for(int SceneNo = 0; SceneNo < scenes.size(); SceneNo++)
+			{
+				int frameCount = scenes.get(SceneNo).size();
+				if(frameCount%2==0)
+				{
+					int numBytes = (int)(frameCount * AudioBytesPerFrame);
+					byte[] abData = new byte[numBytes];
+					audioInputStream.read(abData, 0, numBytes);
+					SceneRMS.add(RootMeanSquared(abData));
+				}
+				else 
+				{
+					int numBytes = (int)((frameCount-1)*AudioBytesPerFrame);
+					numBytes+=1837;
+					byte[] abData = new byte[numBytes];
+					audioInputStream.read(abData, 0, numBytes);
+					SceneRMS.add(RootMeanSquared(abData));
+				}
+			}
+			if(DEBUG==1)
+			{
+				int pos=0;
+				for(double rms: SceneRMS)
+				{
+					System.out.println("SceneNo["+ pos++ +"] = "+rms);
+				}
+			}
+		} 
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		} 
+
 	}
 
 }
